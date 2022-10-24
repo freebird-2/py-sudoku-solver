@@ -2,16 +2,14 @@
 Start reading at solver.run. Simple GUI interface for solving Sudoku puzzles. Updating the GUI is done
 automatically with tk.IntVar objects.
 """
-from __future__ import annotations
-
 import logging
 import math
 import random
 import threading
 import tkinter as tk
-from tkinter import ttk
 from tkinter import filedialog
 from tkinter import messagebox
+from tkinter import ttk
 from typing import Any, Callable
 
 logging.basicConfig(level=logging.DEBUG, format='%(funcName)s (%(lineno)d) :\n%(message)s\n')

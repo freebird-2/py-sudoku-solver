@@ -1,0 +1,1 @@
+pyinstaller --icon=sudoku.ico --name="Sudoku Solver" main.py
