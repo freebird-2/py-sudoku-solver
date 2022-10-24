@@ -1,1 +1,1 @@
-pyinstaller --icon=sudoku.ico --name="Sudoku Solver" main.py
+pyinstaller --icon=sudoku.ico --name="Sudoku Solver" --noconsole main.py
