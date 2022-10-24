@@ -1,1 +1,1 @@
-pyinstaller --icon=sudoku.ico --name="Sudoku Solver" --noconsole main.py
+.\venv\Scripts\pyinstaller.exe --icon=sudoku.ico --name="Sudoku Solver" --noconsole main.py
