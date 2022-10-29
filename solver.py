@@ -300,3 +300,6 @@ def run() -> None:
 
     window.mainloop()
 """ END """
+
+if __name__ == '__main__':
+    run()
