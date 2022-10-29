@@ -1,4 +1,7 @@
 # py-sudoku-solver
+A GUI application for solving Sudoku puzzles.
+
+Built with Python and Tcl/Tk.
 ## Instructions
 ### Option 1
 Run `sudosolver.py` like any other Python script: from the command line, in an IDE, etc.
