@@ -1,1 +1,7 @@
-.\venv\Scripts\pyinstaller.exe --noconfirm -F --icon=sudoku.ico --noconsole solver.py
+.\venv\Scripts\pyinstaller.exe ^
+    --noconfirm ^
+    --noconsole ^
+    --onefile ^
+    --log-level="WARN" ^
+    --icon=sudoku.ico ^
+    sudosolver.py
