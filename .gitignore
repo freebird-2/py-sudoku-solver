@@ -2,6 +2,6 @@ venv/
 build/
 dist/
 .idea/dictionaries/
-puzzles/
 __pycache__/
 *.spec
+puzzles/
