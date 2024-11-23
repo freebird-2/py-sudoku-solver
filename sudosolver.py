@@ -28,15 +28,21 @@ DIGIT_FONT = ('Helvetica', '30')
 class Labels:
     STATE_ATTR = 'state'
     TEXT_ATTR = 'text'
-    LOAD_BTN_TEXT = 'Load'
-    STORE_BTN_TEXT = 'Store'
+    LOAD_BTN_TEXT = 'Load from file'
+    STORE_BTN_TEXT = 'Save to file'
     START_BTN_TEXT = 'Start'
     RESET_BTN_TEXT = 'Reset'
-    RANDOMIZE_BTN_TEXT = 'Randomize'
+    CLEAR_BTN_TEXT = 'Clear'
     GRID_CANVAS_NAME = 'grid_canvas'
     WHITE_COLOR = 'white'
     BLACK_COLOR = 'black'
+    YELLOW_COLOR = 'yellow'
     WINDOW_NAME = 'Sudoku'
+
+highlighted_cell: Coords = None
+
+digits = set(range(1, DEFAULT_GRID_WIDTH_CELLS + 1))
+digits_with_zero = set(range(DEFAULT_GRID_WIDTH_CELLS + 1))
 
 """ BEGIN: PEERS"""
 def get_bound_box(coords: Coords, grid_size: int) -> tuple[int, int, int]:
@@ -116,18 +122,16 @@ def is_solved(grid: Grid) -> bool:
         if unique_digits_in_group != all_digits:
             return False
     return True
+
+def is_valid_puzzle(grid: Grid) -> bool:
+    for group in grid + cols(grid) + boxes(grid):
+        digits_in_group = [cell.get() for cell in group if cell.get() != EMPTY_CELL_VALUE]
+        if len(digits_in_group) != len(set(digits_in_group)):
+            return False
+    return True
 """ END """
 
 """ BEGIN: UTIL """
-def grid_to_str(grid: RawGrid) -> str:
-    """
-    Utility function for producing an easily readable string representation of a raw_grid.
-    :param grid: The raw_grid
-    :return: The produced string representation
-    """
-    return '\n'.join(['  '.join(map(lambda d: '•' if d == EMPTY_CELL_VALUE else str(d), row)) for row in grid])
-
-
 def read_grid(filename: str) -> RawGrid:
     with open(filename) as f:
         content = f.read()
@@ -155,11 +159,6 @@ def write_grid(grid: RawGrid, filename: str) -> None:
 def empty_grid(width: int) -> list[list[int]]:
     return [[0 for _ in range(width)] for _ in range(width)]
 
-
-def random_grid(width: int) -> list[list[int]]:
-    return [[random.randint(0, width) for _ in range(width)] for _ in range(width)]
-
-
 def split_list(lst: list[Any], max_size: int) -> list[list[Any]]:
     """
     Splits a list into sublists of the specified size. The final sublist will have [1-n] elements.
@@ -171,48 +170,22 @@ def split_list(lst: list[Any], max_size: int) -> list[list[Any]]:
 """ END"""
 
 """ BEGIN: INTERFACE """
-def on_cell_update(canvas: tk.Canvas, var: tk.IntVar, y: int, x: int) -> None:
-    render_cell(canvas, var, (y, x))
+def get_cell_text_tag(cell_x: int, cell_y: int) -> str:
+    return f'cell_text{cell_x},{cell_y}'
 
+def get_cell_rect_tag(cell_x: int, cell_y: int) -> str:
+    return f'cell_rect({cell_x},{cell_y})'
 
-# def insert_vars(raw_grid: list[list[int]], master: tk.Tk) -> Grid:
-#     grid = []
-#     for y, raw_row in enumerate(raw_grid):
-#         row = []
-#         for x, cell in enumerate(raw_row):
-#             cell_var = tk.IntVar(master=master, value=cell, name=f'cell({y},{x})')
-#             cell_var.trace_add('write', lambda *_, var=cell_var, cell_y=y, cell_x=x: on_cell_update(master, var, cell_y, cell_x))
-#             row.append(cell_var)
-#         grid.append(row)
-#     return grid
+def center_of_cell(cell_x: int, cell_y: int) -> tuple[float, float]:
+    return (cell_x * DEFAULT_CELL_WIDTH_PIXELS + DEFAULT_CELL_WIDTH_PIXELS / 2,
+            cell_y * DEFAULT_CELL_WIDTH_PIXELS + DEFAULT_CELL_WIDTH_PIXELS / 2)
 
-
-def cell_tag_for(coords: Coords) -> str:
-    return f'{coords[0]},{coords[1]}'
-
-
-def center_of_cell(coord: int) -> float:
-    return coord * DEFAULT_CELL_WIDTH_PIXELS + DEFAULT_CELL_WIDTH_PIXELS / 2
-
-
-def render_cell(canvas: tk.Canvas, cell: tk.IntVar, coords: Coords) -> None:
-    canvas.delete(cell_tag_for(coords))
+def render_cell(canvas: tk.Canvas, cell: tk.IntVar, cell_x: int, cell_y: int) -> None:
+    cell_text_tag = get_cell_text_tag(cell_x, cell_y)
     if cell.get() == 0:
-        return
-    canvas.create_text(
-        center_of_cell(coords[1]),
-        center_of_cell(coords[0]),
-        text=str(cell.get()),
-        font=DIGIT_FONT,
-        tags=cell_tag_for(coords)
-    )
-
-
-def render_grid(canvas: tk.Canvas, grid: Grid) -> None:
-    for y, row in enumerate(grid):
-        for x, cell in enumerate(row):
-            render_cell(canvas, cell, (y, x))
-
+        canvas.itemconfigure(cell_text_tag, text=' ')
+    else:
+        canvas.itemconfigure(cell_text_tag, text=str(cell.get()))
 
 def render_grid_lines(canvas: tk.Canvas, grid_width_cells: int):
     for line_number in range(0, grid_width_cells + 1):
@@ -223,18 +196,60 @@ def render_grid_lines(canvas: tk.Canvas, grid_width_cells: int):
             canvas.create_line(coords, fill=Labels.BLACK_COLOR, width=line_width)
 
 
-def create_empty_cell(canvas: tk.Canvas, y: int, x: int) -> Any:
+def create_empty_cell(canvas: tk.Canvas, x: int, y: int) -> Any:
     cell_var = tk.IntVar(master=canvas, value=EMPTY_CELL_VALUE, name=f'cell({y}, {x})')
-    cell_var.trace_add('write', lambda *_, var=cell_var, y_coord=y, x_coord=x: on_cell_update(canvas, var, y_coord, x_coord))
+    cell_var.trace_add('write', lambda *_, var=cell_var, x_coord=x, y_coord=y: render_cell(canvas, var, x_coord, y_coord))
     return cell_var
 
 
 def create_empty_grid(canvas: tk.Canvas, width: int) -> Grid:
-    return [[create_empty_cell(canvas, y, x) for x in range(width)] for y in range(width)]
+    return [[create_empty_cell(canvas, x, y) for x in range(width)] for y in range(width)]
 
 
 def dump_grid_values(grid: Grid) -> RawGrid:
     return [[cell.get() for cell in row] for row in grid]
+
+def cell_at(pixel_x: int, pixel_y: int) -> Coords:
+    return (pixel_x // DEFAULT_CELL_WIDTH_PIXELS, pixel_y // DEFAULT_CELL_WIDTH_PIXELS)
+
+def get_next_cell(cell_x: int, cell_y: int, grid_width_cells: int) -> Coords:
+    next_cell_x = (cell_x + 1) % grid_width_cells
+    next_cell_y = ((cell_y + 1) % grid_width_cells) if next_cell_x == 0 else cell_y
+    return (next_cell_x, next_cell_y)
+
+def get_prev_cell(cell_x: int, cell_y: int, grid_width_cells: int) -> Coords:
+    prev_cell_x = (cell_x - 1) % grid_width_cells
+    prev_cell_y = ((cell_y - 1) % grid_width_cells) if prev_cell_x == (grid_width_cells - 1) else cell_y
+    return (prev_cell_x, prev_cell_y)
+
+def color_cell_bg(canvas: tk.Canvas, cell_x: int, cell_y: int, color: str):
+    canvas.itemconfigure(get_cell_rect_tag(cell_x, cell_y), fill=color)
+
+def create_cell_rects(canvas, grid_width_cells: int):
+    for cell_x in range(grid_width_cells):
+        for cell_y in range(grid_width_cells):
+            pixel_x = cell_x * DEFAULT_CELL_WIDTH_PIXELS
+            pixel_y = cell_y * DEFAULT_CELL_WIDTH_PIXELS
+            canvas.create_rectangle(
+                    pixel_x,
+                    pixel_y,
+                    pixel_x + DEFAULT_CELL_WIDTH_PIXELS,
+                    pixel_y + DEFAULT_CELL_WIDTH_PIXELS,
+                    fill='white',
+                    tags=get_cell_rect_tag(cell_x, cell_y)
+            )
+
+def create_cell_texts(canvas, grid_width_cells: int):
+    for cell_x in range(grid_width_cells):
+        for cell_y in range(grid_width_cells):
+            center_pixel_x, center_pixel_y = center_of_cell(cell_x, cell_y)
+            canvas.create_text(
+                center_pixel_x,
+                center_pixel_y,
+                text=' ',
+                font=DIGIT_FONT,
+                tags=get_cell_text_tag(cell_x, cell_y)
+            )
 
 
 def run() -> None:
@@ -244,9 +259,10 @@ def run() -> None:
     canvas = tk.Canvas(window, name=Labels.GRID_CANVAS_NAME, background=Labels.WHITE_COLOR, width=GRID_WIDTH_PIXELS, height=GRID_WIDTH_PIXELS)
 
     grid = create_empty_grid(canvas, DEFAULT_GRID_WIDTH_CELLS)
+    create_cell_rects(canvas, DEFAULT_GRID_WIDTH_CELLS)
+    create_cell_texts(canvas, DEFAULT_GRID_WIDTH_CELLS)
     raw_grid = dump_grid_values(grid)
     render_grid_lines(canvas, DEFAULT_GRID_WIDTH_CELLS)
-    render_grid(canvas, grid)
 
     def load():
         filename = filedialog.askopenfilename(filetypes=(('text files', '*.txt'),))
@@ -261,14 +277,16 @@ def run() -> None:
         grid_values = dump_grid_values(grid)
         write_grid(grid_values, filename)
 
-
     def start():
-        for button in (load_button, store_button, start_button, reset_button, randomize_button):
+        for button in (load_button, store_button, start_button, reset_button, clear_button):
             button[Labels.STATE_ATTR] = tk.DISABLED
-        solved = solve(grid)
-        if not solved:
-            messagebox.showerror('', 'This puzzle is not solvable.')
-        for button in (load_button, store_button, start_button, reset_button, randomize_button):
+        if not is_valid_puzzle(grid):
+            messagebox.showerror('', 'This puzzle is not solvable (invalid initial conditions).')
+        else:
+            solved = solve(grid)
+            if not solved:
+                messagebox.showerror('', 'This puzzle is not solvable.')
+        for button in (load_button, store_button, start_button, reset_button, clear_button):
             button[Labels.STATE_ATTR] = tk.NORMAL
 
     def reset():
@@ -276,27 +294,72 @@ def run() -> None:
             for x, cell in enumerate(row):
                 cell.set(raw_grid[y][x])
 
-    def randomize():
-        new_raw_grid = random_grid(len(grid))
-        for y, row in enumerate(grid):
-            raw_grid[y][:] = new_raw_grid[y]
-            for x, cell in enumerate(row):
-                cell.set(new_raw_grid[y][x])
+    def clear():
+        raw_grid = empty_grid(DEFAULT_GRID_WIDTH_CELLS)
+        for row in grid:
+            for cell in row:
+                cell.set(0)
 
-    # left_frame = ttk.Frame(window)
+    def handle_key_press(event):
+        keysym = event.keysym
+        global highlighted_cell
+        if highlighted_cell is None:
+            return
+        hl_cell_x, hl_cell_y = highlighted_cell
+        if keysym in ('Up', 'Down', 'Left', 'Right'):
+            if keysym == 'Up' and hl_cell_y > 0:
+                hl_cell_y -= 1
+            elif keysym == 'Down' and hl_cell_y < (DEFAULT_GRID_WIDTH_CELLS - 1):
+                hl_cell_y += 1
+            elif keysym == 'Left' and hl_cell_x > 0:
+                hl_cell_x -= 1
+            elif keysym == 'Right' and hl_cell_x < (DEFAULT_GRID_WIDTH_CELLS - 1):
+                hl_cell_x += 1
+            change_hl_cell(canvas, hl_cell_x, hl_cell_y)
+        elif keysym in (str(n) for n in range(DEFAULT_GRID_WIDTH_CELLS + 1)):
+            grid[hl_cell_y][hl_cell_x].set(int(keysym))
+            next_cell_x, next_cell_y = get_next_cell(*highlighted_cell, DEFAULT_GRID_WIDTH_CELLS)
+            change_hl_cell(canvas, next_cell_x, next_cell_y)
+        elif keysym == 'space':
+            grid[hl_cell_y][hl_cell_x].set(0)
+            next_cell_x, next_cell_y = get_next_cell(*highlighted_cell, DEFAULT_GRID_WIDTH_CELLS)
+            change_hl_cell(canvas, next_cell_x, next_cell_y)
+        elif keysym == 'BackSpace':
+            grid[hl_cell_y][hl_cell_x].set(0)
+            prev_cell_x, prev_cell_y = get_prev_cell(*highlighted_cell, DEFAULT_GRID_WIDTH_CELLS)
+            change_hl_cell(canvas, prev_cell_x, prev_cell_y)
+
+    def change_hl_cell(canvas, new_hl_cell_x: int, new_hl_cell_y: int):
+        global highlighted_cell
+        if (new_hl_cell_x, new_hl_cell_y) == highlighted_cell:
+            return
+        if highlighted_cell is not None:
+            color_cell_bg(canvas, *highlighted_cell, 'white')
+        color_cell_bg(canvas, new_hl_cell_x, new_hl_cell_y, 'yellow')
+        highlighted_cell = (new_hl_cell_x, new_hl_cell_y)
+
+    def handle_click(event):
+        global highlighted_cell
+        clicked_cell_x, clicked_cell_y = cell_at(event.x, event.y)
+        change_hl_cell(canvas, clicked_cell_x, clicked_cell_y)
+
     right_frame = ttk.Frame(window)
 
     load_button = ttk.Button(right_frame, text=Labels.LOAD_BTN_TEXT, command=load)
     store_button = ttk.Button(right_frame, text=Labels.STORE_BTN_TEXT, command=store)
     start_button = ttk.Button(right_frame, text=Labels.START_BTN_TEXT, command=lambda: threading.Thread(target=start).start())
     reset_button = ttk.Button(right_frame, text=Labels.RESET_BTN_TEXT, command=reset)
-    randomize_button = ttk.Button(right_frame, text=Labels.RANDOMIZE_BTN_TEXT, command=randomize)
+    clear_button = ttk.Button(right_frame, text=Labels.CLEAR_BTN_TEXT, command=clear)
 
-    for i, button in enumerate((load_button, store_button, start_button, reset_button, randomize_button)):
+
+    for i, button in enumerate((load_button, store_button, start_button, reset_button, clear_button)):
         button.grid(row=i, column=0, pady=(10 if i == 0 else 0, 10), padx=(7, 10))
 
     canvas.grid(row=0, column=0)
     right_frame.grid(row=0, column=1, sticky=tk.N)
+
+    window.bind("<Key>", handle_key_press)
+    canvas.bind("<Button-1>", handle_click)
 
     window.mainloop()
 """ END """
